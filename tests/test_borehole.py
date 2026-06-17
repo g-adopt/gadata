@@ -73,3 +73,79 @@ def test_collection_load_logs_not_implemented():
     coll = BoreholeCollection([Borehole.from_feature(HEADER_FEATURE)], region)
     with pytest.raises(NotImplementedError):
         coll.load_logs()
+
+
+# -- log-export GeoDataFrames -------------------------------------------
+
+from gadata.domain.stratigraphy import (  # noqa: E402
+    EarthMaterialInterval,
+    StratigraphyInterval,
+)
+
+STRAT_A = {"ENO": 1, "BOREHOLE_NAME": "BH1", "INTERVAL_BEGIN_M": 0,
+           "INTERVAL_END_M": 5, "STRAT_UNIT_NAME": "Sand",
+           "DEPTH_REF_POINT_ELEV_M_AHD": 100}
+STRAT_B = {"ENO": 1, "BOREHOLE_NAME": "BH1", "INTERVAL_BEGIN_M": 5,
+           "INTERVAL_END_M": 10, "STRAT_UNIT_NAME": "Clay"}
+EARTH_A = {"ENO": 2, "BOREHOLE_NAME": "BH2", "INTERVAL_BEGIN_M": 0,
+           "INTERVAL_END_M": 3, "LITHOLOGY": "gravel", "LITHOLOGY_GROUP": "rock"}
+
+
+def _two_bore_collection():
+    region = Region.from_bbox(149.0, -36.0, 150.0, -35.0)
+    a = Borehole(eno=1, name="BH1", longitude=149.1, latitude=-35.5)
+    b = Borehole(eno=2, name="BH2", longitude=149.3, latitude=-35.2)
+    return BoreholeCollection([a, b], region), a, b
+
+
+def test_stratigraphy_geodataframe_rows_and_columns():
+    coll, a, b = _two_bore_collection()
+    a.set_stratigraphy([StratigraphyInterval.from_feature(STRAT_A),
+                        StratigraphyInterval.from_feature(STRAT_B)])
+    b.set_stratigraphy([])  # loaded, no intervals
+    gdf = coll.stratigraphy_geodataframe()
+    assert len(gdf) == 2  # only the two intervals on BH1
+    assert gdf.crs.to_epsg() == 4283
+    for col in ("eno", "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+                "unit", "valid", "invalid_reason", "geometry"):
+        assert col in gdf.columns
+    assert gdf.geometry.iloc[0].geom_type == "Point"
+    assert set(gdf["unit"]) == {"Sand", "Clay"}
+    assert gdf["ref_elev_m_ahd"].iloc[0] == 100.0
+
+
+def test_earth_material_geodataframe_rows_and_columns():
+    coll, a, b = _two_bore_collection()
+    a.set_earth_material([])
+    b.set_earth_material([EarthMaterialInterval.from_feature(EARTH_A)])
+    gdf = coll.earth_material_geodataframe()
+    assert len(gdf) == 1
+    assert gdf.crs.to_epsg() == 4283
+    for col in ("lithology", "lithology_group", "description",
+                "earth_material_id", "geometry"):
+        assert col in gdf.columns
+    assert gdf["lithology"].iloc[0] == "gravel"
+
+
+def test_stratigraphy_geodataframe_not_loaded_raises():
+    coll, _, _ = _two_bore_collection()
+    with pytest.raises(RuntimeError, match="stratigraphy not loaded"):
+        coll.stratigraphy_geodataframe()
+
+
+def test_earth_material_geodataframe_not_loaded_raises():
+    coll, _, _ = _two_bore_collection()
+    with pytest.raises(RuntimeError, match="earth_material not loaded"):
+        coll.earth_material_geodataframe()
+
+
+def test_stratigraphy_geodataframe_loaded_but_empty():
+    coll, a, b = _two_bore_collection()
+    a.set_stratigraphy([])
+    b.set_stratigraphy([])
+    gdf = coll.stratigraphy_geodataframe()
+    assert len(gdf) == 0
+    assert gdf.crs.to_epsg() == 4283
+    # Documented columns still present on the empty frame.
+    for col in ("eno", "top_depth_m", "unit", "valid"):
+        assert col in gdf.columns

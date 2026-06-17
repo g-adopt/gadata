@@ -21,7 +21,14 @@ coverage.xml
 *.parquet
 .gadata_cache/
 
+# Generated example outputs
+examples/*.gpkg
+examples/*.csv
+examples/*.h5
+
 # Editor / OS
 .vscode/
 .idea/
 .DS_Store
+*.swp
+*.swo

@@ -49,6 +49,11 @@ for b in bores:
 
 bores.load_logs("earth_material")        # b.earth_material is then populated
 
+# Export the loaded logs as a tidy GeoDataFrame (one row per interval, borehole
+# point geometry, EPSG:4283). Save with geopandas: .to_file('x.gpkg') / .to_csv(...).
+strat = bores.stratigraphy_geodataframe()
+earth = bores.earth_material_geodataframe()
+
 # A single borehole by ENO or PID.
 one = ga.borehole("35147")
 

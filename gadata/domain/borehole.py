@@ -216,6 +216,105 @@ class BoreholeCollection:
             geoms.append(b.point)
         return gpd.GeoDataFrame(records, geometry=geoms, crs="EPSG:4283")
 
+    # -- downhole-log export --------------------------------------------
+
+    #: Column order for the stratigraphy export (also used for an empty frame).
+    _STRAT_COLUMNS = [
+        "eno", "borehole_name", "longitude", "latitude",
+        "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+        "unit", "unit_pid", "older_age", "younger_age",
+        "older_age_ma", "younger_age_ma", "top_contact", "base_contact",
+        "geological_province", "stratigraphy_id", "valid", "invalid_reason",
+    ]
+    #: Column order for the earth-material export.
+    _EARTH_COLUMNS = [
+        "eno", "borehole_name", "longitude", "latitude",
+        "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+        "lithology", "lithology_group", "lithology_qualifier", "description",
+        "geological_province", "earth_material_id", "valid", "invalid_reason",
+    ]
+
+    def stratigraphy_geodataframe(self) -> "GeoDataFrame":
+        """Loaded stratigraphy intervals as a tidy GeoDataFrame (EPSG:4283).
+
+        One row per :class:`StratigraphyInterval` across the collection, with the
+        borehole's Point as geometry. Requires logs to have been loaded first
+        (``load_logs('stratigraphy')``); raises ``RuntimeError`` otherwise. When
+        loaded but empty, returns an empty frame with the documented columns.
+        """
+        if not any(b._stratigraphy is not None for b in self._boreholes):
+            raise RuntimeError(
+                "stratigraphy not loaded; call load_logs('stratigraphy') first"
+            )
+        records, geoms = [], []
+        for b in self._boreholes:
+            for iv in (b._stratigraphy or []):
+                records.append({
+                    "eno": iv.eno,
+                    "borehole_name": iv.borehole_name or b.name,
+                    "longitude": b.longitude,
+                    "latitude": b.latitude,
+                    "top_depth_m": iv.top_depth,
+                    "bottom_depth_m": iv.bottom_depth,
+                    "ref_elev_m_ahd": iv.ref_elevation_m_ahd,
+                    "unit": iv.unit,
+                    "unit_pid": iv.unit_pid,
+                    "older_age": iv.older_age,
+                    "younger_age": iv.younger_age,
+                    "older_age_ma": iv.older_age_ma,
+                    "younger_age_ma": iv.younger_age_ma,
+                    "top_contact": iv.top_contact,
+                    "base_contact": iv.base_contact,
+                    "geological_province": iv.geological_province,
+                    "stratigraphy_id": iv.stratigraphy_id,
+                    "valid": iv.valid,
+                    "invalid_reason": iv.invalid_reason,
+                })
+                geoms.append(b.point)
+        return self._log_frame(records, geoms, self._STRAT_COLUMNS)
+
+    def earth_material_geodataframe(self) -> "GeoDataFrame":
+        """Loaded earth-material intervals as a tidy GeoDataFrame (EPSG:4283).
+
+        One row per :class:`EarthMaterialInterval`; same contract as
+        :meth:`stratigraphy_geodataframe` (load first, empty-frame when empty).
+        """
+        if not any(b._earth_material is not None for b in self._boreholes):
+            raise RuntimeError(
+                "earth_material not loaded; call load_logs('earth_material') first"
+            )
+        records, geoms = [], []
+        for b in self._boreholes:
+            for iv in (b._earth_material or []):
+                records.append({
+                    "eno": iv.eno,
+                    "borehole_name": iv.borehole_name or b.name,
+                    "longitude": b.longitude,
+                    "latitude": b.latitude,
+                    "top_depth_m": iv.top_depth,
+                    "bottom_depth_m": iv.bottom_depth,
+                    "ref_elev_m_ahd": iv.ref_elevation_m_ahd,
+                    "lithology": iv.lithology,
+                    "lithology_group": iv.lithology_group,
+                    "lithology_qualifier": iv.lithology_qualifier,
+                    "description": iv.description,
+                    "geological_province": iv.geological_province,
+                    "earth_material_id": iv.earth_material_id,
+                    "valid": iv.valid,
+                    "invalid_reason": iv.invalid_reason,
+                })
+                geoms.append(b.point)
+        return self._log_frame(records, geoms, self._EARTH_COLUMNS)
+
+    @staticmethod
+    def _log_frame(records, geoms, columns) -> "GeoDataFrame":
+        """Build a log GeoDataFrame, falling back to an empty typed frame."""
+        import geopandas as gpd
+
+        if not records:
+            return gpd.GeoDataFrame({c: [] for c in columns}, geometry=[], crs="EPSG:4283")
+        return gpd.GeoDataFrame(records, geometry=geoms, crs="EPSG:4283")[columns + ["geometry"]]
+
     def load_logs(self, kind: str = "stratigraphy", **kwargs) -> None:
         """Bulk-load downhole logs for every borehole in the collection.
 

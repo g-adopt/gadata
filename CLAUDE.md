@@ -71,7 +71,10 @@ Module helpers for hydrogeology provenance (no method on a bare GeoDataFrame):
   its `Region`. `__len__`, `__iter__`, `__getitem__`, `enos`, `to_geodataframe()`
   (headers as points in EPSG:4283). `load_logs(kind="stratigraphy"|"earth_material",
   force_refresh=False)` bulk-loads logs onto each borehole (wired by the client).
-  `provenance()` / `citation()` surface the cache entry's source/license/access date.
+  `stratigraphy_geodataframe()` / `earth_material_geodataframe()` export the loaded
+  logs as a tidy GeoDataFrame (one row per interval, borehole-point geometry,
+  EPSG:4283; raise if not loaded, empty frame if loaded-but-zero). `provenance()` /
+  `citation()` surface the cache entry's source/license/access date.
 - **`StratigraphyInterval`, `EarthMaterialInterval`** (`stratigraphy.py`) — frozen
   value objects, one log interval each. `top_depth`/`bottom_depth` in **metres
   below the depth reference point**; `ref_elevation_m_ahd` in m AHD. `from_feature`
