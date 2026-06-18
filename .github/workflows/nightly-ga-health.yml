@@ -1,4 +1,4 @@
-name: Nightly GA server health
+name: Nightly GA + NGIS data health
 
 on:
   schedule:
@@ -14,8 +14,10 @@ concurrency:
 
 jobs:
   smoke:
-    name: Smoke health check (nightly)
+    name: Smoke health check (nightly, GA + NGIS)
     # Runs on the nightly cron and on manual dispatch (not the weekly slot).
+    # Selects by marker, so it covers both the GA service checks and the NGIS
+    # primary/mirror reachability checks (HEAD-only — no core downloads here).
     if: github.event.schedule == '0 16 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

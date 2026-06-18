@@ -92,3 +92,25 @@ def test_unparseable_depth_treated_as_missing():
     iv = EarthMaterialInterval.from_feature(feat)
     assert iv.top_depth is None
     assert iv.valid is False
+
+
+def test_intervals_capture_full_raw_bag():
+    s = StratigraphyInterval.from_feature(STRAT_FEATURE)
+    assert s.source_attributes == STRAT_FEATURE
+    e = EarthMaterialInterval.from_feature(EARTH_FEATURE)
+    assert e.source_attributes == EARTH_FEATURE
+
+
+def test_strat_comment_is_none_for_ga_but_promoted_when_present():
+    assert StratigraphyInterval.from_feature(STRAT_FEATURE).comment is None
+    feat = dict(STRAT_FEATURE, COMMENT="Bottom of renmark at 186 m")
+    assert StratigraphyInterval.from_feature(feat).comment == "Bottom of renmark at 186 m"
+
+
+def test_source_attributes_compare_false_keeps_intervals_hashable():
+    a = StratigraphyInterval.from_feature(STRAT_FEATURE)
+    b = StratigraphyInterval.from_feature(dict(STRAT_FEATURE, EXTRA="differs"))
+    # Real fields identical, only the raw bag differs (compare=False).
+    assert a == b
+    assert hash(a) == hash(b)
+    assert len({a, b}) == 1

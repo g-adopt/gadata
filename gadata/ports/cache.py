@@ -46,3 +46,19 @@ class DatasetCache(Protocol):
     def has(self, key: str) -> bool:
         """True if an entry exists for ``key`` (regardless of freshness)."""
         ...
+
+    def provenance(self, key: str) -> dict:
+        """Return the manifest provenance record for ``key`` (``{}`` if absent).
+
+        A pure read of the stored manifest entry (source/license/citation/
+        validators such as ``server_fingerprint``); no network access.
+        """
+        ...
+
+    def list(self) -> "list[str]":
+        """All cached keys (used to sweep superseded entries on a rebuild)."""
+        ...
+
+    def clear(self, key: Optional[str] = None) -> None:
+        """Remove one entry (``key``) or the whole cache (``key=None``)."""
+        ...

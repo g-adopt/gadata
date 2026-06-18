@@ -10,8 +10,14 @@ Depth datum (pinned, per DESIGN's schema-pinning requirement)
   point** (``INTERVAL_BEGIN_M`` / ``INTERVAL_END_M`` from the service), with
   ``top`` shallower (smaller) than ``bottom``. The reference point elevation is
   carried as ``ref_elevation_m_ahd`` (``DEPTH_REF_POINT_ELEV_M_AHD``, metres AHD)
-  so a consumer can convert to elevation if needed. The service's per-interval
-  elevation fields are routinely null and are not modelled here.
+  so a consumer can convert to elevation if needed.
+* ``top_elev_m_ahd`` / ``bottom_elev_m_ahd`` carry the per-interval top/base
+  elevation in **metres AHD** (``INTERVAL_BEGIN_ELEV_M_AHD`` /
+  ``INTERVAL_END_ELEV_M_AHD``). These are routinely null on the GA WFS but are
+  populated by sources that provide them (e.g. the NGIS state cores, whose
+  ``TopElev`` / ``BottomElev`` map onto these keys). They are what a consumer
+  wants for building absolute layer geometry, so they are modelled here
+  source-agnostically; fall back to ``ref_elevation_m_ahd - depth`` when null.
 
 Null / invalid-interval policy (pinned)
 ---------------------------------------
@@ -25,7 +31,7 @@ should filter on ``valid`` so bad rows never poison downstream models.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from gadata.domain.coercion import to_float as _to_float
@@ -63,9 +69,13 @@ class StratigraphyInterval:
     base_contact: Optional[str]
     geological_province: Optional[str]
     ref_elevation_m_ahd: Optional[float]
+    top_elev_m_ahd: Optional[float]
+    bottom_elev_m_ahd: Optional[float]
     stratigraphy_id: Optional[int]
     valid: bool
     invalid_reason: Optional[str] = None
+    comment: Optional[str] = None
+    source_attributes: dict = field(default_factory=dict, compare=False)
 
     @classmethod
     def from_feature(cls, properties: dict) -> "StratigraphyInterval":
@@ -92,9 +102,13 @@ class StratigraphyInterval:
             base_contact=_to_str(p.get("BASE_CONTACT_NAME")),
             geological_province=_to_str(p.get("GEOLOGICAL_PROVINCE")),
             ref_elevation_m_ahd=_to_float(p.get("DEPTH_REF_POINT_ELEV_M_AHD")),
+            top_elev_m_ahd=_to_float(p.get("INTERVAL_BEGIN_ELEV_M_AHD")),
+            bottom_elev_m_ahd=_to_float(p.get("INTERVAL_END_ELEV_M_AHD")),
             stratigraphy_id=int(sid) if sid is not None else None,
             valid=reason is None,
             invalid_reason=reason,
+            comment=_to_str(p.get("COMMENT")),
+            source_attributes=dict(p),
         )
 
 
@@ -116,9 +130,12 @@ class EarthMaterialInterval:
     description: Optional[str]
     geological_province: Optional[str]
     ref_elevation_m_ahd: Optional[float]
+    top_elev_m_ahd: Optional[float]
+    bottom_elev_m_ahd: Optional[float]
     earth_material_id: Optional[int]
     valid: bool
     invalid_reason: Optional[str] = None
+    source_attributes: dict = field(default_factory=dict, compare=False)
 
     @classmethod
     def from_feature(cls, properties: dict) -> "EarthMaterialInterval":
@@ -141,7 +158,10 @@ class EarthMaterialInterval:
             description=_to_str(p.get("EARTH_MATERIAL_DESC")),
             geological_province=_to_str(p.get("GEOLOGICAL_PROVINCE")),
             ref_elevation_m_ahd=_to_float(p.get("DEPTH_REF_POINT_ELEV_M_AHD")),
+            top_elev_m_ahd=_to_float(p.get("INTERVAL_BEGIN_ELEV_M_AHD")),
+            bottom_elev_m_ahd=_to_float(p.get("INTERVAL_END_ELEV_M_AHD")),
             earth_material_id=int(emid) if emid is not None else None,
             valid=reason is None,
             invalid_reason=reason,
+            source_attributes=dict(p),
         )

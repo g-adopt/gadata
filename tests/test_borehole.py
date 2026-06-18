@@ -36,6 +36,24 @@ def test_borehole_falls_back_to_gda94_props():
     assert bh.longitude == 149.2 and bh.latitude == -35.1
 
 
+def test_borehole_from_feature_tags_source_and_captures_raw_bag():
+    bh = Borehole.from_feature(HEADER_FEATURE)
+    assert bh.source == "GA"
+    assert bh.source_attributes == HEADER_FEATURE
+    # GA leaves the promoted NGIS header fields null.
+    assert bh.bore_depth_m is None
+    assert bh.drilled_depth_m is None
+    assert bh.drilled_date is None
+
+
+def test_unloaded_construction_raises_then_returns_when_injected():
+    bh = Borehole.from_feature(HEADER_FEATURE)
+    with pytest.raises(NotImplementedError):
+        _ = bh.construction
+    bh.set_construction([])
+    assert bh.construction == []
+
+
 def test_unloaded_logs_raise_not_implemented():
     bh = Borehole.from_feature(HEADER_FEATURE)
     with pytest.raises(NotImplementedError):
@@ -66,6 +84,10 @@ def test_collection_to_geodataframe_is_lonlat():
     assert len(gdf) == 1
     assert gdf.crs.to_epsg() == 4283
     assert "eno" in gdf.columns
+    assert "source" in gdf.columns
+    assert gdf["source"].iloc[0] == "GA"
+    for col in ("bore_depth_m", "drilled_depth_m", "drilled_date"):
+        assert col in gdf.columns
 
 
 def test_collection_load_logs_not_implemented():
@@ -106,8 +128,8 @@ def test_stratigraphy_geodataframe_rows_and_columns():
     gdf = coll.stratigraphy_geodataframe()
     assert len(gdf) == 2  # only the two intervals on BH1
     assert gdf.crs.to_epsg() == 4283
-    for col in ("eno", "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
-                "unit", "valid", "invalid_reason", "geometry"):
+    for col in ("source", "eno", "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+                "unit", "comment", "valid", "invalid_reason", "geometry"):
         assert col in gdf.columns
     assert gdf.geometry.iloc[0].geom_type == "Point"
     assert set(gdf["unit"]) == {"Sand", "Clay"}
@@ -147,5 +169,54 @@ def test_stratigraphy_geodataframe_loaded_but_empty():
     assert len(gdf) == 0
     assert gdf.crs.to_epsg() == 4283
     # Documented columns still present on the empty frame.
-    for col in ("eno", "top_depth_m", "unit", "valid"):
+    for col in ("source", "eno", "top_depth_m", "unit", "comment", "valid"):
+        assert col in gdf.columns
+
+
+# -- construction export (NGIS-only) ------------------------------------
+
+from gadata.domain.construction import ConstructionInterval  # noqa: E402
+
+CONSTRUCTION_A = {"BOREHOLE_NAME": "GW1", "INTERVAL_BEGIN_M": 30,
+                  "INTERVAL_END_M": 42, "CONSTRUCTION_TYPE": "Screen",
+                  "MATERIAL": "PVC", "DEPTH_REF_POINT_ELEV_M_AHD": 120}
+
+
+def _ngis_two_bore_collection():
+    region = Region.from_bbox(143.0, -36.0, 146.0, -34.0)
+    a = Borehole(eno=None, name="GW1", longitude=143.5, latitude=-35.0,
+                 source="NGIS:NSW")
+    b = Borehole(eno=None, name="GW2", longitude=144.0, latitude=-34.5,
+                 source="NGIS:NSW")
+    return BoreholeCollection([a, b], region), a, b
+
+
+def test_construction_geodataframe_rows_and_source_column():
+    coll, a, b = _ngis_two_bore_collection()
+    a.set_construction([ConstructionInterval.from_feature(CONSTRUCTION_A)])
+    b.set_construction([])
+    gdf = coll.construction_geodataframe()
+    assert len(gdf) == 1
+    assert gdf.crs.to_epsg() == 4283
+    for col in ("source", "construction_type", "material", "inner_diameter",
+                "property", "drill_method", "geometry"):
+        assert col in gdf.columns
+    assert gdf["source"].iloc[0] == "NGIS:NSW"
+    assert gdf["construction_type"].iloc[0] == "Screen"
+
+
+def test_construction_geodataframe_not_loaded_raises():
+    coll, _, _ = _ngis_two_bore_collection()
+    with pytest.raises(RuntimeError, match="construction not loaded"):
+        coll.construction_geodataframe()
+
+
+def test_construction_geodataframe_loaded_but_empty():
+    coll, a, b = _ngis_two_bore_collection()
+    a.set_construction([])
+    b.set_construction([])
+    gdf = coll.construction_geodataframe()
+    assert len(gdf) == 0
+    assert gdf.crs.to_epsg() == 4283
+    for col in ("source", "construction_type", "material", "valid"):
         assert col in gdf.columns

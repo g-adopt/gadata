@@ -15,20 +15,26 @@ _logging.getLogger("gadata").addHandler(_logging.NullHandler())
 from gadata.domain.region import Region  # noqa: E402
 from gadata.domain.borehole import Borehole, BoreholeCollection  # noqa: E402
 from gadata.domain.stratigraphy import StratigraphyInterval, EarthMaterialInterval  # noqa: E402
+from gadata.domain.construction import ConstructionInterval  # noqa: E402
 from gadata.domain.hydrogeology import HydrogeologyUnit  # noqa: E402
 from gadata.client import (  # noqa: E402
     GADataClient,
     hydrogeology_citation,
     hydrogeology_provenance,
 )
+from gadata.ngis_client import NGISClient  # noqa: E402
+from gadata.groundwater_client import GroundwaterClient  # noqa: E402
 
 __all__ = [
     "GADataClient",
+    "NGISClient",
+    "GroundwaterClient",
     "Region",
     "Borehole",
     "BoreholeCollection",
     "StratigraphyInterval",
     "EarthMaterialInterval",
+    "ConstructionInterval",
     "HydrogeologyUnit",
     "hydrogeology_provenance",
     "hydrogeology_citation",

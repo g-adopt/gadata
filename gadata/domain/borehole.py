@@ -24,6 +24,7 @@ from gadata.domain.coercion import to_str as _to_str
 if TYPE_CHECKING:  # avoid importing geopandas at domain import time
     from geopandas import GeoDataFrame
 
+    from gadata.domain.construction import ConstructionInterval
     from gadata.domain.region import Region
     from gadata.domain.stratigraphy import EarthMaterialInterval, StratigraphyInterval
 
@@ -50,10 +51,19 @@ class Borehole:
     observation_method: Optional[str] = None
     data_custodian: Optional[str] = None
     depth_reference: Optional[str] = None
+    # Source tag: 'GA' for the WFS, 'NGIS:NSW' etc. for the NGIS state cores.
+    source: Optional[str] = None
+    # Promoted NGIS header fields (broadly useful; null on GA).
+    bore_depth_m: Optional[float] = None
+    drilled_depth_m: Optional[float] = None
+    drilled_date: Optional[str] = None
+    # The entire original record verbatim, for whatever isn't promoted above.
+    source_attributes: dict = field(default_factory=dict)
 
     # Memoised log stores. ``None`` means "not yet loaded"; a list means loaded.
     _stratigraphy: Optional[List["StratigraphyInterval"]] = field(default=None, repr=False)
     _earth_material: Optional[List["EarthMaterialInterval"]] = field(default=None, repr=False)
+    _construction: Optional[List["ConstructionInterval"]] = field(default=None, repr=False)
 
     @classmethod
     def from_feature(cls, properties: dict, geometry: Optional[dict] = None) -> "Borehole":
@@ -88,6 +98,8 @@ class Borehole:
             observation_method=_to_str(p.get("observationMethod")),
             data_custodian=_to_str(p.get("boreholeDataCustodian")),
             depth_reference=_to_str(p.get("depthReferencePoints")),
+            source="GA",
+            source_attributes=dict(p),
         )
 
     @property
@@ -127,6 +139,19 @@ class Borehole:
             )
         return self._earth_material
 
+    @property
+    def construction(self) -> List["ConstructionInterval"]:
+        """Construction (screen/casing) intervals. NGIS-only; null on GA.
+
+        Returns injected/memoised logs if present; raises until loaded.
+        """
+        if self._construction is None:
+            raise NotImplementedError(
+                "Construction log loading is not implemented yet (depends on the "
+                "infrastructure layer); inject intervals via set_construction() for now."
+            )
+        return self._construction
+
     def set_stratigraphy(self, intervals: List["StratigraphyInterval"]) -> None:
         """Inject/memoise stratigraphy intervals (used by loaders and tests)."""
         self._stratigraphy = list(intervals)
@@ -134,6 +159,10 @@ class Borehole:
     def set_earth_material(self, intervals: List["EarthMaterialInterval"]) -> None:
         """Inject/memoise earth-material intervals (used by loaders and tests)."""
         self._earth_material = list(intervals)
+
+    def set_construction(self, intervals: List["ConstructionInterval"]) -> None:
+        """Inject/memoise construction intervals (used by loaders and tests)."""
+        self._construction = list(intervals)
 
 
 class BoreholeCollection:
@@ -211,6 +240,10 @@ class BoreholeCollection:
                     "purpose": b.purpose,
                     "status": b.status,
                     "drilling_method": b.drilling_method,
+                    "source": b.source,
+                    "bore_depth_m": b.bore_depth_m,
+                    "drilled_depth_m": b.drilled_depth_m,
+                    "drilled_date": b.drilled_date,
                 }
             )
             geoms.append(b.point)
@@ -220,18 +253,29 @@ class BoreholeCollection:
 
     #: Column order for the stratigraphy export (also used for an empty frame).
     _STRAT_COLUMNS = [
-        "eno", "borehole_name", "longitude", "latitude",
+        "source", "eno", "borehole_name", "longitude", "latitude",
         "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+        "top_elev_m_ahd", "bottom_elev_m_ahd",
         "unit", "unit_pid", "older_age", "younger_age",
         "older_age_ma", "younger_age_ma", "top_contact", "base_contact",
-        "geological_province", "stratigraphy_id", "valid", "invalid_reason",
+        "geological_province", "stratigraphy_id", "comment",
+        "valid", "invalid_reason",
     ]
     #: Column order for the earth-material export.
     _EARTH_COLUMNS = [
-        "eno", "borehole_name", "longitude", "latitude",
+        "source", "eno", "borehole_name", "longitude", "latitude",
         "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+        "top_elev_m_ahd", "bottom_elev_m_ahd",
         "lithology", "lithology_group", "lithology_qualifier", "description",
         "geological_province", "earth_material_id", "valid", "invalid_reason",
+    ]
+    #: Column order for the construction export.
+    _CONSTRUCTION_COLUMNS = [
+        "source", "eno", "borehole_name", "longitude", "latitude",
+        "top_depth_m", "bottom_depth_m", "ref_elev_m_ahd",
+        "top_elev_m_ahd", "bottom_elev_m_ahd",
+        "construction_type", "material", "inner_diameter", "outer_diameter",
+        "property", "property_size", "drill_method", "valid", "invalid_reason",
     ]
 
     def stratigraphy_geodataframe(self) -> "GeoDataFrame":
@@ -250,6 +294,7 @@ class BoreholeCollection:
         for b in self._boreholes:
             for iv in (b._stratigraphy or []):
                 records.append({
+                    "source": b.source,
                     "eno": iv.eno,
                     "borehole_name": iv.borehole_name or b.name,
                     "longitude": b.longitude,
@@ -257,6 +302,8 @@ class BoreholeCollection:
                     "top_depth_m": iv.top_depth,
                     "bottom_depth_m": iv.bottom_depth,
                     "ref_elev_m_ahd": iv.ref_elevation_m_ahd,
+                    "top_elev_m_ahd": iv.top_elev_m_ahd,
+                    "bottom_elev_m_ahd": iv.bottom_elev_m_ahd,
                     "unit": iv.unit,
                     "unit_pid": iv.unit_pid,
                     "older_age": iv.older_age,
@@ -267,6 +314,7 @@ class BoreholeCollection:
                     "base_contact": iv.base_contact,
                     "geological_province": iv.geological_province,
                     "stratigraphy_id": iv.stratigraphy_id,
+                    "comment": iv.comment,
                     "valid": iv.valid,
                     "invalid_reason": iv.invalid_reason,
                 })
@@ -287,6 +335,7 @@ class BoreholeCollection:
         for b in self._boreholes:
             for iv in (b._earth_material or []):
                 records.append({
+                    "source": b.source,
                     "eno": iv.eno,
                     "borehole_name": iv.borehole_name or b.name,
                     "longitude": b.longitude,
@@ -294,6 +343,8 @@ class BoreholeCollection:
                     "top_depth_m": iv.top_depth,
                     "bottom_depth_m": iv.bottom_depth,
                     "ref_elev_m_ahd": iv.ref_elevation_m_ahd,
+                    "top_elev_m_ahd": iv.top_elev_m_ahd,
+                    "bottom_elev_m_ahd": iv.bottom_elev_m_ahd,
                     "lithology": iv.lithology,
                     "lithology_group": iv.lithology_group,
                     "lithology_qualifier": iv.lithology_qualifier,
@@ -305,6 +356,44 @@ class BoreholeCollection:
                 })
                 geoms.append(b.point)
         return self._log_frame(records, geoms, self._EARTH_COLUMNS)
+
+    def construction_geodataframe(self) -> "GeoDataFrame":
+        """Loaded construction intervals as a tidy GeoDataFrame (EPSG:4283).
+
+        One row per :class:`ConstructionInterval` (NGIS-only); same contract as
+        :meth:`stratigraphy_geodataframe` (load first via
+        ``load_logs('construction')``, empty-frame when loaded but empty).
+        """
+        if not any(b._construction is not None for b in self._boreholes):
+            raise RuntimeError(
+                "construction not loaded; call load_logs('construction') first"
+            )
+        records, geoms = [], []
+        for b in self._boreholes:
+            for iv in (b._construction or []):
+                records.append({
+                    "source": b.source,
+                    "eno": iv.eno,
+                    "borehole_name": iv.borehole_name or b.name,
+                    "longitude": b.longitude,
+                    "latitude": b.latitude,
+                    "top_depth_m": iv.top_depth,
+                    "bottom_depth_m": iv.bottom_depth,
+                    "ref_elev_m_ahd": iv.ref_elevation_m_ahd,
+                    "top_elev_m_ahd": iv.top_elev_m_ahd,
+                    "bottom_elev_m_ahd": iv.bottom_elev_m_ahd,
+                    "construction_type": iv.construction_type,
+                    "material": iv.material,
+                    "inner_diameter": iv.inner_diameter,
+                    "outer_diameter": iv.outer_diameter,
+                    "property": iv.property,
+                    "property_size": iv.property_size,
+                    "drill_method": iv.drill_method,
+                    "valid": iv.valid,
+                    "invalid_reason": iv.invalid_reason,
+                })
+                geoms.append(b.point)
+        return self._log_frame(records, geoms, self._CONSTRUCTION_COLUMNS)
 
     @staticmethod
     def _log_frame(records, geoms, columns) -> "GeoDataFrame":

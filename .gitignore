@@ -21,10 +21,14 @@ coverage.xml
 *.parquet
 .gadata_cache/
 
-# Generated example outputs
+# Generated example outputs (scripts are kept; their data/image outputs are not)
 examples/*.gpkg
 examples/*.csv
 examples/*.h5
+examples/**/*.gpkg
+examples/**/*.csv
+examples/**/*.h5
+examples/**/*.png
 
 # Editor / OS
 .vscode/
@@ -32,3 +36,9 @@ examples/*.h5
 .DS_Store
 *.swp
 *.swo
+
+# Large downloaded datasets (NGIS geodatabases etc.) — but keep the schema doc
+data/*
+!data/ngis/
+data/ngis/*
+!data/ngis/NGIS_SCHEMA.md
