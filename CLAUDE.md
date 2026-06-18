@@ -177,3 +177,57 @@ GeoJSON ↔ GeoDataFrames ↔ domain objects (`gdf_to_borehole_collection`,
   elevation fields on `StratigraphyInterval`; the lower-priority unknowns flagged
   at the end of `GA_SERVER_TEST_PLAN.md`.
 - Commits: author as Sia Ghelichkhan, no AI attribution.
+
+## Status & session log (last updated 2026-06-18)
+
+**Package state: complete and in use.** Pushed to https://github.com/g-adopt/gadata
+(public, `main`). Tests green (offline unit + live smoke/contract), flake8 + mypy
+clean. Nightly smoke + weekly contract GitHub Actions are wired and were proven
+green in CI. The build was done in reviewed increments (scaffold → adapters →
+cache → facade → docs → live health suite → flatten layout → log-export IO).
+
+**Log-export IO (added last):** `BoreholeCollection.stratigraphy_geodataframe()`
+and `earth_material_geodataframe()` return tidy one-row-per-interval GeoDataFrames
+(EPSG:4283, borehole point geometry). Call `load_logs(kind)` first (they raise
+otherwise); empty → typed empty frame. Save via geopandas (`.to_file`, `.to_csv`).
+
+### Active application: Lower Murrumbidgee groundwater mesh (for omega)
+
+We are sourcing borehole/stratigraphy data to help build an OMEGA mesh of the
+**Lower Murrumbidgee MODFLOW domain** (CSIRO/SKM 2010; 3 aquifer layers —
+Shepparton Fm / Calivil Fm / Renmark Group). The domain spec and georeference are
+in `~/Workplace/omega/demos/lower_murrumbidgee/full_modflow_domain.md`. The OMEGA
+mesh uses a **local metric frame** (metres, arbitrary (0,0) origin); we
+georeference it to lon/lat (gadata's required CRS) using that note's fit:
+SW corner at **143.01°E, −35.76°** = local (0,0); **~91,800 m/° lon**,
+**~110,170 m/° lat**. Full grid = 330 × 210 km. Worked scripts live in
+`examples/lower_murrumbidgee_*.py`.
+
+**Key finding — GA open data is too sparse here for the aquifer geometry:**
+- 226 GA boreholes in the full grid (38 inside the active alluvium outline).
+- **Stratigraphy logs: only 5 holes / 23 intervals.** Just **Jerilderie 1**
+  (ENO 12391) logs all three model formations (Shepparton/Calivil/Renmark) in one
+  column to 1.3 km; **Killendoo 1** (ENO 12599) has Renmark; the other 3 are
+  basement granite picks. Note Jerilderie 1's intervals **overlap** (multiple
+  logging schemes nested at the same depths) — filter to named-formation
+  intervals before use.
+- **Earth-material logs: 51 holes / 137 intervals, but mostly useless here** —
+  ~129 are shallow (<1 m) regolith samples from a National Geochemical Survey
+  campaign ("Catchment outlet sediment", holes named `2007190xxx`), plus a few
+  deep basement rock/exploration samples. They do **not** profile the aquifer fill.
+- **Conclusion:** GA's national WFS is a sparse regional supplement. The dense
+  layer-pick data for this model lives in the **NSW DCCEEW Water / CSIRO–SKM
+  MODFLOW input decks** (and likely the `elevation_data.csv`/`bedrock_data.csv`
+  already under `~/Workplace/gw_demos`). Use GA's Jerilderie 1 as a validation
+  tie-point, not as the primary layer constraint.
+
+### Where to resume
+
+- The interpolation layer (parallel to the data layer) is still **deferred** —
+  it would consume these domain objects to build 3D layer surfaces.
+- If continuing with GA data: consider pulling a wider buffer or the other GA log
+  layers (construction/NVCL), and modelling the per-interval AHD elevation fields.
+- The real next move for the mesh is obtaining the NSW/CSIRO bore data, not more
+  GA queries.
+- A standing offer was left open: a final adversarial Opus code review of the
+  whole implementation before building omega on top.
