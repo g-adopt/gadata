@@ -130,7 +130,7 @@ geometry you get back is lon/lat in GDA94 — no reprojection happens here.
 
 ## Architecture
 
-The package follows clean-architecture / DDD layering (see `DESIGN.md`):
+The package follows clean-architecture / DDD layering:
 
 - `domain/` — pure value objects and entities (`Region`, `Borehole`,
   `BoreholeCollection`, `StratigraphyInterval`, `EarthMaterialInterval`,

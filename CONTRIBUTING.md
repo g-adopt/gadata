@@ -1,9 +1,10 @@
 # Contributing to austrata
 
 Thanks for helping improve austrata. It is a pure data-access + caching layer
-over Geoscience Australia open data and the NGIS state cores; the architecture
-and the verified service quirks it works around are documented in `DESIGN.md`,
-which is worth a read before changing anything below `client.py`.
+over Geoscience Australia open data and the NGIS state cores, following a
+clean-architecture dependency rule (`domain` → `ports` → `application` →
+`infrastructure` → `client`). The README's Architecture section is a good
+orientation before changing anything below `client.py`.
 
 ## Environment & commands
 
